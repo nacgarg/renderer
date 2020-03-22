@@ -1,11 +1,10 @@
-#include <SDL2/SDL.h>
-
-#include "types.h"
 #include "renderer.h"
+
+#include <iostream>
+
 #define DEFAULT_SIZE 600
 
-Renderer::Renderer(int width = DEFAULT_SIZE, int height = DEFAULT_SIZE)
-    : w(width), h(height) {
+Renderer::Renderer(int width, int height) : w(width), h(height) {
   SDL_Init(SDL_INIT_VIDEO);
   SDL_CreateWindowAndRenderer(w, h, 0, &window, &renderer);
 }
@@ -34,7 +33,73 @@ void Renderer::plot(vec2 pos, color c) {
 
 void Renderer::draw() {
   // here is where we actually plot stuff
-  for (int i = 0; i < w; ++i) {
-    plot({i, i}, {255, 255, 255, 255});
+  plotLine({0, 0}, {500, 100}, {255, 255, 255, 255});
+  plotLine({500, 100}, {300, 550}, {255, 255, 255, 255});
+  plotLine({300, 550}, {0, 0}, {123, 123, 255, 255});
+}
+
+void Renderer::plotLine(vec2 start, vec2 end, color c) {
+  // We have a couple different cases here
+  float x0 = start.x;
+  float x1 = end.x;
+  float y0 = start.y;
+  float y1 = end.y;
+
+  float dx = x1 - x0;
+  float dy = y1 - y0;
+
+  float dErr;
+  float err = 0;
+  int y;
+  int x;
+
+  // Case 1: not steep (dx > dy)
+  if (abs(dx) > abs(dy)) {
+    if (x0 > x1) {
+      std::swap(x0, x1);
+      std::swap(y0, y1);
+    }
+    dx = x1 - x0;
+    dy = y1 - y0;
+    dErr = abs(dy / dx);
+
+    y = y0;
+    for (x = x0; x < x1; ++x) {
+      plot({x, y}, c);
+      err += dErr;
+      if (err > 0.5) {
+        if (dy < 0) {
+          y--;
+        } else {
+          y++;
+        }
+        err -= 1;
+      }
+    }
+  }
+
+  // Case 2: steep (dy > dx)
+  else {
+    if (y0 > y1) {
+      std::swap(x0, x1);
+      std::swap(y0, y1);
+    }
+    dx = x1 - x0;
+    dy = y1 - y0;
+    dErr = abs(dx / dy);
+
+    x = x0;
+    for (y = y0; y < y1; ++y) {
+      plot({x, y}, c);
+      err += dErr;
+      if (err > 0.5) {
+        if (dx < 0) {
+          x--;
+        } else {
+          x++;
+        }
+        err -= 1;
+      }
+    }
   }
 }
