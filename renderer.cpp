@@ -36,8 +36,20 @@ void Renderer::start() {
         if (event.key.keysym.sym == SDLK_d) {
           worldToCamera.l.x += 0.05;
         }
+        if (event.key.keysym.sym == SDLK_k) {
+          hFov += 0.01;
+        }
+        if (event.key.keysym.sym == SDLK_l) {
+          hFov -= 0.01;
+        }
         break;
 
+      case SDL_WINDOWEVENT:
+        if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+          screen = SDL_GetWindowSurface(window);
+          h = screen->h;
+          w = screen->w;
+        }
       default:
         break;
     }
@@ -171,22 +183,37 @@ void Renderer::plotLine(vec2 start, vec2 end, color c) {
   }
 }
 
-vec2 Renderer::projectPoint(vec3 p) {
-  // compute position in camera space
-  vec3 pCamera = mulP(worldToCamera, p);
-  vec2 pScreen = {pCamera.x / -pCamera.z, pCamera.y / -pCamera.z};
-  float ww = 1;
-  float hh = 1;
-  vec2 pNorm = {(pScreen.x + ww / 2.0) / ww, (pScreen.y + hh / 2.0) / hh};
+vec2 Renderer::projRaster(vec3 p) {
+  vec3 pScreen = projCamera(p);
+
+  float aspect = (float)w / (float)h;
+  float canvasWidth = tan(hFov / 2) * nearClipPlane;
+  float canvasHeight = canvasWidth / aspect;
+
+  //   std::cout << canvasWidth << " " << canvasHeight << "\n";
+
+  vec2 pNorm = {
+      (pScreen.x + canvasWidth / 2.0) / canvasWidth,
+      (pScreen.y + canvasHeight / 2.0) / canvasHeight,
+  };
+
   float pixelWidth = w;
   float pixelHeight = h;
   vec2 pRaster = {pNorm.x * pixelWidth, (1.0 - pNorm.y) * pixelHeight};
   return pRaster;
 }
 
+vec3 Renderer::projCamera(vec3 p) {
+  // compute position in camera/screen space
+  vec3 pCamera = mulP(worldToCamera, p);
+  vec3 pScreen = {nearClipPlane * pCamera.x / -pCamera.z,
+                  nearClipPlane * pCamera.y / -pCamera.z, -pCamera.z};
+  return pScreen;
+}
+
 void Renderer::plotLine3(vec3 start, vec3 end, color c) {
-  vec2 startProj = projectPoint(start);
-  vec2 endProj = projectPoint(end);
+  vec2 startProj = projRaster(start);
+  vec2 endProj = projRaster(end);
   //   std::cout << startProj.x << " " << startProj.y << ", " << endProj.x << " " <<
   //   endProj.y
   //             << "\n";
@@ -229,7 +256,7 @@ std::vector<tri> Renderer::loadOBJ(std::string file) {
       verts.push_back({x, y, z});
     } else if (ch == 'f') {
       f >> ch >> a >> b >> c;
-      tris.push_back({verts[a], verts[b], verts[c]});
+      tris.push_back({verts[a-1], verts[b-1], verts[c-1]});
     } else {
       getline(f, line);
     }

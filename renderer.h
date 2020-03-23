@@ -24,9 +24,11 @@ class Renderer {
   mat4 worldToCamera = {{1.0, 0.0, 0.0, 0.0},
                         {0.0, 1.0, 0.0, 0.0},
                         {0.0, 0.0, 1.0, 0.0},
-                        {0.0, 0.0, 4, 1.0}};
+                        {0.0, 0.0, 10, 1.0}};
 
-  vec2 projectPoint(vec3 point);
+  vec2 projRaster(vec3 point);
+  vec3 projCamera(vec3 point);
+
 
   void draw();
 
@@ -40,4 +42,7 @@ class Renderer {
   std::vector<tri> loadOBJ(std::string file);
   std::vector<tri> testObject;
   std::deque<unsigned int> lastFrameTimes;
+
+  float nearClipPlane = 0.01;
+  float hFov = 80 * 3.1415 / 180.0;
 };
