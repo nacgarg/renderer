@@ -60,5 +60,7 @@ mat4 rotY(float theta);
 mat4 rotX(float theta);
 mat4 trans(vec3 pos);
 
+bool operator==(color a, color b);
+bool operator!=(color a, color b);
 
 #endif

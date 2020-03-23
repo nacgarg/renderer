@@ -7,17 +7,18 @@
 
 Renderer::Renderer(int width, int height) : w(width), h(height) {
   SDL_Init(SDL_INIT_VIDEO);
-  SDL_CreateWindowAndRenderer(w, h, 0, &window, &renderer);
+  window = SDL_CreateWindow("Renderer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                            w, h, 0);
+  screen = SDL_GetWindowSurface(window);
 }
 
 Renderer::~Renderer() {
-  SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
 }
 
 void Renderer::start() {
-  test_object = loadOBJ("test.obj");
+  testObject = loadOBJ("test.obj");
   while (1) {
     if (SDL_PollEvent(&event) && event.type == SDL_QUIT) break;
     switch (event.type) {
@@ -40,18 +41,37 @@ void Renderer::start() {
       default:
         break;
     }
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-    SDL_RenderClear(renderer);  // black background
+
+    unsigned int start = SDL_GetTicks();
+
+    SDL_memset(screen->pixels, 0, screen->h * screen->pitch);  // black background
 
     draw();
+
+    SDL_UpdateWindowSurface(window);
+    unsigned int msPerFrame = SDL_GetTicks() - start;
+    lastFrameTimes.push_front(msPerFrame);
+    if (lastFrameTimes.size() > 100) {
+      lastFrameTimes.pop_back();
+    }
+    if (t % 100 == 0) {
+      float sum = 0;
+      for (auto a : lastFrameTimes) {
+        sum += a;
+      }
+      sum /= lastFrameTimes.size();
+      std::cout << "FPS: " << 1000.0 / sum << "\n";
+    }
+
     ++t;
-    SDL_RenderPresent(renderer);
   }
 }
 
 void Renderer::plot(vec2 pos, color c) {
-  SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-  SDL_RenderDrawPoint(renderer, pos.x, pos.y);
+  if (!checkPos(pos)) return;
+  auto ptr = (unsigned char*)screen->pixels;
+  ptr += ((int)pos.y * screen->pitch + ((int)pos.x * sizeof(unsigned int)));
+  *((unsigned int*)ptr) = SDL_MapRGBA(screen->format, c.r, c.g, c.b, c.a);
 }
 
 void Renderer::draw() {
@@ -74,9 +94,9 @@ void Renderer::draw() {
   c = mulP(r, {0.5, 0.0, -1.});
   d = mulP(r, {0.5, 1.0, -0.5});
   std::vector<tri> tetrahedron = {{a, b, c}, {a, b, d}, {a, c, d}, {b, c, d}};
-  std::vector<tri> rotated(test_object.size());
+  std::vector<tri> rotated(testObject.size());
   int i = 0;
-  for (tri t : test_object) {
+  for (tri t : testObject) {
     rotated[i++] = {mulP(r, t.a), mulP(r, t.b), mulP(r, t.c)};
   }
   plotMesh(tetrahedron, {123, 123, 255, 255});
@@ -97,6 +117,8 @@ void Renderer::plotLine(vec2 start, vec2 end, color c) {
   float err = 0;
   int y;
   int x;
+
+  std::vector<SDL_Point> pts;
 
   // Case 1: not steep (dx > dy)
   if (abs(dx) > abs(dy)) {
@@ -196,7 +218,6 @@ std::vector<tri> Renderer::loadOBJ(std::string file) {
   std::vector<vec3> verts;
   std::vector<tri> tris;
 
-
   float x, y, z;
   int a, b, c;
   std::string line;
@@ -206,12 +227,11 @@ std::vector<tri> Renderer::loadOBJ(std::string file) {
     if (ch == 'v') {
       f >> ch >> x >> y >> z;
       verts.push_back({x, y, z});
-    }
-    else if (ch == 'f') {
+    } else if (ch == 'f') {
       f >> ch >> a >> b >> c;
       tris.push_back({verts[a], verts[b], verts[c]});
     } else {
-        getline(f, line);
+      getline(f, line);
     }
   }
 

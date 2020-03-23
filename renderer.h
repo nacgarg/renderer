@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <deque>
 
 #include "types.h"
 #define DEFAULT_SIZE 600
@@ -14,7 +15,7 @@ class Renderer {
 
  private:
   SDL_Event event;
-  SDL_Renderer *renderer;
+  SDL_Surface *screen;
   SDL_Window *window;
   int w;
   int h;
@@ -37,5 +38,6 @@ class Renderer {
 
   bool checkPos(vec2 p);
   std::vector<tri> loadOBJ(std::string file);
-  std::vector<tri> test_object;
+  std::vector<tri> testObject;
+  std::deque<unsigned int> lastFrameTimes;
 };

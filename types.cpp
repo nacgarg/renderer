@@ -77,3 +77,8 @@ mat4 mul(mat4 a, mat4 b) {
   r.l = mul(a, b.l);
   return r;
 }
+
+bool operator==(color a, color b) {
+  return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+bool operator!=(color a, color b) { return !(a == b); }
