@@ -1,5 +1,6 @@
 #include "renderer.h"
 
+#include <fstream>
 #include <iostream>
 
 #define DEFAULT_SIZE 600
@@ -16,10 +17,29 @@ Renderer::~Renderer() {
 }
 
 void Renderer::start() {
-  //   worldToCamera = rotX(3.1415 * 4);
-
+  test_object = loadOBJ("test.obj");
   while (1) {
     if (SDL_PollEvent(&event) && event.type == SDL_QUIT) break;
+    switch (event.type) {
+      case SDL_KEYDOWN:
+        // printf("Key press detected: %s\n", SDL_GetKeyName(event.key.keysym.sym));
+        if (event.key.keysym.sym == SDLK_w) {
+          worldToCamera.l.z -= 0.05;
+        }
+        if (event.key.keysym.sym == SDLK_a) {
+          worldToCamera.l.x -= 0.05;
+        }
+        if (event.key.keysym.sym == SDLK_s) {
+          worldToCamera.l.z += 0.05;
+        }
+        if (event.key.keysym.sym == SDLK_d) {
+          worldToCamera.l.x += 0.05;
+        }
+        break;
+
+      default:
+        break;
+    }
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);  // black background
 
@@ -45,7 +65,7 @@ void Renderer::draw() {
 
   float theta = (float)t / 1000;
   mat4 rx = rotX(theta);  // rotation matrix around X axis
-  mat4 ry = rotY(theta); // rotation around Y axis
+  mat4 ry = rotY(theta);  // rotation around Y axis
   mat4 r = mul(rx, ry);
 
   vec3 a, b, c, d;
@@ -53,11 +73,14 @@ void Renderer::draw() {
   b = mulP(r, {1., 0.0, 0.0});
   c = mulP(r, {0.5, 0.0, -1.});
   d = mulP(r, {0.5, 1.0, -0.5});
-  tri tetrahedron[4] = {{a, b, c}, {a, b, d}, {a, c, d}, {b, c, d}};
-
-  for (tri t : tetrahedron) {
-    plotTriLines(t, {123, 123, 255, 255});
+  std::vector<tri> tetrahedron = {{a, b, c}, {a, b, d}, {a, c, d}, {b, c, d}};
+  std::vector<tri> rotated(test_object.size());
+  int i = 0;
+  for (tri t : test_object) {
+    rotated[i++] = {mulP(r, t.a), mulP(r, t.b), mulP(r, t.c)};
   }
+  plotMesh(tetrahedron, {123, 123, 255, 255});
+  plotMesh(rotated, {255, 50, 255, 255});
 }
 
 void Renderer::plotLine(vec2 start, vec2 end, color c) {
@@ -142,8 +165,9 @@ vec2 Renderer::projectPoint(vec3 p) {
 void Renderer::plotLine3(vec3 start, vec3 end, color c) {
   vec2 startProj = projectPoint(start);
   vec2 endProj = projectPoint(end);
-//   std::cout << startProj.x << " " << startProj.y << ", " << endProj.x << " " << endProj.y
-//             << "\n";
+  //   std::cout << startProj.x << " " << startProj.y << ", " << endProj.x << " " <<
+  //   endProj.y
+  //             << "\n";
   if (checkPos(startProj) && checkPos(endProj)) {
     plotLine(startProj, endProj, c);
   }
@@ -155,4 +179,42 @@ void Renderer::plotTriLines(tri t, color c) {
   plotLine3(t.c, t.a, c);
 }
 
+void Renderer::plotMesh(std::vector<tri> tris, color c) {
+  for (tri t : tris) {
+    plotTriLines(t, c);
+  }
+}
+
 bool Renderer::checkPos(vec2 p) { return p.x >= 0 && p.x < w && p.y >= 0 && p.y < h; }
+
+std::vector<tri> Renderer::loadOBJ(std::string file) {
+  std::cout << "Opening " << file << std::endl;
+  std::ifstream f(file);
+  if (!f.is_open()) {
+    std::cerr << "Unable to open " << file << "\n";
+  }
+  std::vector<vec3> verts;
+  std::vector<tri> tris;
+
+
+  float x, y, z;
+  int a, b, c;
+  std::string line;
+
+  while (f) {
+    char ch = f.peek();
+    if (ch == 'v') {
+      f >> ch >> x >> y >> z;
+      verts.push_back({x, y, z});
+    }
+    else if (ch == 'f') {
+      f >> ch >> a >> b >> c;
+      tris.push_back({verts[a], verts[b], verts[c]});
+    } else {
+        getline(f, line);
+    }
+  }
+
+  f.close();
+  return tris;
+}
