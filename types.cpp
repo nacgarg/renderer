@@ -62,15 +62,19 @@ mat4 rotX(float theta) {
 
 mat4 trans(vec3 pos) {
   // translation matrix at the position
-  mat4 t;
+  mat4 t = zero();
   t.l.x = pos.x;
   t.l.y = pos.y;
   t.l.z = pos.z;
+  t.i.x = 1.0;
+  t.j.y = 1.0;
+  t.k.z = 1.0;
+  t.l.w = 1.0;
   return t;
 }
 
 mat4 mul(mat4 a, mat4 b) {
-  mat4 r;
+  mat4 r = zero();
   r.i = mul(a, b.i);
   r.j = mul(a, b.j);
   r.k = mul(a, b.k);
@@ -82,3 +86,20 @@ bool operator==(color a, color b) {
   return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 bool operator!=(color a, color b) { return !(a == b); }
+color operator*(color a, float b) { return {a.r * b, a.g * b, a.b * b, a.a * b}; }
+float triEdge(vec3 a, vec3 b, vec3 c) {
+  return ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x));
+}
+
+float length(vec3 a) { return sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
+vec3 unit(vec3 a) {
+  float l = length(a);
+  return {a.x / l, a.y / l, a.z / l};
+}
+
+vec3 cross(vec3 u, vec3 v) {
+  return {(u.y * v.z) - (v.y * u.z), (v.x * u.z) - (u.x * v.z),
+          (u.x * v.y) - (v.x * u.y)};
+}
+
+vec3 operator-(vec3 a, vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }

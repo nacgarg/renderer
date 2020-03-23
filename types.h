@@ -1,7 +1,13 @@
 #ifndef _INCL_TYPES
 #define _INCL_TYPES
 
+struct vec2 {
+  float x;
+  float y;
+};
+
 struct vec3 {
+  operator vec2() const { return {x, y}; }
   float x;
   float y;
   float z;
@@ -12,11 +18,6 @@ struct color {
   unsigned char g;
   unsigned char b;
   unsigned char a;
-};
-
-struct vec2 {
-  float x;
-  float y;
 };
 
 struct vec4 {
@@ -60,7 +61,15 @@ mat4 rotY(float theta);
 mat4 rotX(float theta);
 mat4 trans(vec3 pos);
 
+float length(vec3 a);
+vec3 unit(vec3 a);
+vec3 cross(vec3 u, vec3 v);
+vec3 operator-(vec3, vec3);
+
 bool operator==(color a, color b);
 bool operator!=(color a, color b);
+color operator*(color a, float b);
+
+float triEdge(vec3, vec3, vec3);
 
 #endif

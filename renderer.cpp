@@ -2,8 +2,7 @@
 
 #include <fstream>
 #include <iostream>
-
-#define DEFAULT_SIZE 600
+#include <limits>
 
 Renderer::Renderer(int width, int height) : w(width), h(height) {
   SDL_Init(SDL_INIT_VIDEO);
@@ -19,22 +18,24 @@ Renderer::~Renderer() {
 
 void Renderer::start() {
   testObject = loadOBJ("test.obj");
+  cowObject = loadOBJ("cow.obj");
+
   while (1) {
     if (SDL_PollEvent(&event) && event.type == SDL_QUIT) break;
     switch (event.type) {
       case SDL_KEYDOWN:
         // printf("Key press detected: %s\n", SDL_GetKeyName(event.key.keysym.sym));
         if (event.key.keysym.sym == SDLK_w) {
-          worldToCamera.l.z -= 0.05;
-        }
-        if (event.key.keysym.sym == SDLK_a) {
-          worldToCamera.l.x -= 0.05;
-        }
-        if (event.key.keysym.sym == SDLK_s) {
           worldToCamera.l.z += 0.05;
         }
-        if (event.key.keysym.sym == SDLK_d) {
+        if (event.key.keysym.sym == SDLK_a) {
           worldToCamera.l.x += 0.05;
+        }
+        if (event.key.keysym.sym == SDLK_s) {
+          worldToCamera.l.z -= 0.05;
+        }
+        if (event.key.keysym.sym == SDLK_d) {
+          worldToCamera.l.x -= 0.05;
         }
         if (event.key.keysym.sym == SDLK_k) {
           hFov += 0.01;
@@ -57,7 +58,8 @@ void Renderer::start() {
     unsigned int start = SDL_GetTicks();
 
     SDL_memset(screen->pixels, 0, screen->h * screen->pitch);  // black background
-
+    depthBuffer.clear();
+    depthBuffer.resize(w * h, std::numeric_limits<float>::infinity());
     draw();
 
     SDL_UpdateWindowSurface(window);
@@ -95,10 +97,12 @@ void Renderer::draw() {
   //   plotLine3({t / 100 - 100, -10, -0.1}, {t / 100 - 100, -10, -10}, {123, 255, 123,
   //   255});
 
-  float theta = (float)t / 1000;
-  mat4 rx = rotX(theta);  // rotation matrix around X axis
-  mat4 ry = rotY(theta);  // rotation around Y axis
+  float theta = (float)t / 500;
+  mat4 rx = rotX(theta);                            // rotation matrix around X axis
+  mat4 ry = rotY(theta);                            // rotation around Y axis
+  mat4 tz = trans({0, 0, sin(theta * 5.f) * 5.f});  // translation in z
   mat4 r = mul(rx, ry);
+  mat4 rt = mul(r, tz);
 
   vec3 a, b, c, d;
   a = mulP(r, {0.0, 0.0, 0.0});
@@ -106,13 +110,19 @@ void Renderer::draw() {
   c = mulP(r, {0.5, 0.0, -1.});
   d = mulP(r, {0.5, 1.0, -0.5});
   std::vector<tri> tetrahedron = {{a, b, c}, {a, b, d}, {a, c, d}, {b, c, d}};
-  std::vector<tri> rotated(testObject.size());
+  std::vector<tri> rotatedTest(testObject.size());
   int i = 0;
   for (tri t : testObject) {
-    rotated[i++] = {mulP(r, t.a), mulP(r, t.b), mulP(r, t.c)};
+    rotatedTest[i++] = {mulP(rt, t.a), mulP(rt, t.b), mulP(rt, t.c)};
   }
-  plotMesh(tetrahedron, {123, 123, 255, 255});
-  plotMesh(rotated, {255, 50, 255, 255});
+  std::vector<tri> rotatedCow(cowObject.size());
+  i = 0;
+  for (tri t : cowObject) {
+    rotatedCow[i++] = {mulP(r, t.a), mulP(r, t.b), mulP(r, t.c)};
+  }
+  plotMesh(rotatedTest, {255, 50, 255, 255});
+  plotMesh(rotatedCow, {255, 255, 50, 255});
+  plotWireframe(tetrahedron, {50, 255, 255, 255});
 }
 
 void Renderer::plotLine(vec2 start, vec2 end, color c) {
@@ -183,23 +193,19 @@ void Renderer::plotLine(vec2 start, vec2 end, color c) {
   }
 }
 
-vec2 Renderer::projRaster(vec3 p) {
-  vec3 pScreen = projCamera(p);
-
+vec3 Renderer::projRaster(vec3 pScreen) {
   float aspect = (float)w / (float)h;
   float canvasWidth = tan(hFov / 2) * nearClipPlane;
   float canvasHeight = canvasWidth / aspect;
 
   //   std::cout << canvasWidth << " " << canvasHeight << "\n";
 
-  vec2 pNorm = {
-      (pScreen.x + canvasWidth / 2.0) / canvasWidth,
-      (pScreen.y + canvasHeight / 2.0) / canvasHeight,
-  };
+  vec3 pNorm = {(pScreen.x + canvasWidth / 2.0) / canvasWidth,
+                (pScreen.y + canvasHeight / 2.0) / canvasHeight, pScreen.z};
 
   float pixelWidth = w;
   float pixelHeight = h;
-  vec2 pRaster = {pNorm.x * pixelWidth, (1.0 - pNorm.y) * pixelHeight};
+  vec3 pRaster = {pNorm.x * pixelWidth, (1.0 - pNorm.y) * pixelHeight, pScreen.z};
   return pRaster;
 }
 
@@ -211,9 +217,14 @@ vec3 Renderer::projCamera(vec3 p) {
   return pScreen;
 }
 
+vec2 Renderer::projectPoint(vec3 p) {
+  vec3 pScreen = projCamera(p);
+  return projRaster(pScreen);
+}
+
 void Renderer::plotLine3(vec3 start, vec3 end, color c) {
-  vec2 startProj = projRaster(start);
-  vec2 endProj = projRaster(end);
+  vec2 startProj = projectPoint(start);
+  vec2 endProj = projectPoint(end);
   //   std::cout << startProj.x << " " << startProj.y << ", " << endProj.x << " " <<
   //   endProj.y
   //             << "\n";
@@ -230,7 +241,82 @@ void Renderer::plotTriLines(tri t, color c) {
 
 void Renderer::plotMesh(std::vector<tri> tris, color c) {
   for (tri t : tris) {
+    plotTriRaster(t, c);
+  }
+}
+
+void Renderer::plotWireframe(std::vector<tri> tris, color c) {
+  for (tri t : tris) {
     plotTriLines(t, c);
+  }
+}
+
+void Renderer::plotTriRaster(tri t, color c) {
+  // First find screenspace coords of triangle verts
+  vec3 c0 = projCamera(t.a);
+  vec3 c1 = projCamera(t.b);
+  vec3 c2 = projCamera(t.c);
+
+  // compute normal vector of plane
+  vec3 planeNormal = cross(unit(c1 - c0), unit(c2 - c0));
+  if (planeNormal.z <= 0) {
+    // backface culling
+    return;
+  }
+
+  vec3 v0 = projRaster(c0);
+  vec3 v1 = projRaster(c1);
+  vec3 v2 = projRaster(c2);
+
+  if (!checkPos(v0) || !checkPos(v1) || !checkPos(v2)) return;
+
+  // Find bounding box of triangle
+  int minX = std::min(v0.x, std::min(v1.x, v2.x));
+  int minY = std::min(v0.y, std::min(v1.y, v2.y));
+  int maxX = std::max(v0.x, std::max(v1.x, v2.x));
+  int maxY = std::max(v0.y, std::max(v1.y, v2.y));
+
+  vec3 center = {(c0.x + c1.x + c2.x) / 3.f, (c0.y + c1.y + c2.y) / 3.f,
+                 (c0.z + c1.z + c2.z) / 3.f};
+  // std::cout << "center: " << center.x << "," << center.y <<","<< center.z << "\n";
+  vec3 centerUnit = unit(vec3({0, 0, 0}) - center);
+  vec3 light = unit(vec3({3, -3, -1}));
+
+  float dotProduct = (centerUnit.x * planeNormal.x) + (centerUnit.y * planeNormal.y) +
+                     (centerUnit.z * planeNormal.z);
+  float angle = acos(dotProduct);
+  float shade = std::min(std::max(0.f, -dotProduct * 500), 0.7f);
+  shade += 0.3f;
+  // std::cout << dotProduct << " " << angle << " " << shade << "\n";
+
+  for (int i = minX; i <= maxX; ++i) {
+    for (int j = minY; j <= maxY; ++j) {
+      if (!checkPos({i, j})) continue;
+      vec3 p = {i, j, 0};
+      float doubleArea = triEdge(v0, v1, v2);
+      float w0 = triEdge(v1, v2, p);
+      float w1 = triEdge(v2, v0, p);
+      float w2 = triEdge(v0, v1, p);
+
+      if (w0 >= 0 && w1 >= 0 && w2 >= 0) {
+        // inside triangle
+        w0 /= doubleArea;
+        w1 /= doubleArea;
+        w2 /= doubleArea;
+
+        float z = 1.0 / ((w0 / v0.z) + (w1 / v1.z) + (w2 / v2.z));
+        if (z < depthBuffer[j * w + i]) {
+          depthBuffer[j * w + i] = z;
+
+          // std::cout << dotProduct << " " << shade << "\n";
+
+          plot(p, c * shade);
+          // plot(p, {(unsigned char)255 * w0, (unsigned char)255 * w1,
+          //          (unsigned char)255 * w2, 255});
+          // plot(p, c);
+        }
+      }
+    }
   }
 }
 
@@ -256,7 +342,7 @@ std::vector<tri> Renderer::loadOBJ(std::string file) {
       verts.push_back({x, y, z});
     } else if (ch == 'f') {
       f >> ch >> a >> b >> c;
-      tris.push_back({verts[a-1], verts[b-1], verts[c-1]});
+      tris.push_back({verts[a - 1], verts[b - 1], verts[c - 1]});
     } else {
       getline(f, line);
     }
